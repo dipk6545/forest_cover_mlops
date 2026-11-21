@@ -44,7 +44,22 @@ services:
     depends_on:
       - kafka
 
-  # 3. Prometheus Observability Server
+  # 3. MLflow Tracking Server with Cloudflare R2 & PostgreSQL
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.11.1
+    container_name: forest_mlflow_server
+    ports:
+      - "5000:5000"
+    env_file:
+      - .env
+    command: >
+      mlflow server
+      --backend-store-uri $${MLFLOW_TRACKING_URI:-sqlite:///mlflow.db}
+      --default-artifact-root $${MLFLOW_ARTIFACT_ROOT:-s3://netsentry/forest-cover-mlops/artifacts}
+      --host 0.0.0.0
+      --port 5000
+
+  # 4. Prometheus Observability Server
   prometheus:
     image: prom/prometheus:v2.47.0
     container_name: forest_prometheus
