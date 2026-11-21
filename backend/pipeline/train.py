@@ -42,6 +42,11 @@ def run_training_pipeline():
 
     # 1. Load Data
     print(f"1. Loading reference training dataset: {train_path}...")
+    if not os.path.exists(train_path):
+        print(f"Dataset not found locally. Auto-pulling from Cloudflare R2...")
+        from backend.pipeline.pull_data import download_data_from_r2
+        download_data_from_r2()
+
     df_raw = pd.read_csv(train_path)
 
     # 2. Feature Engineering
