@@ -2,7 +2,7 @@ import os
 import time
 import json
 import pandas as pd
-from kafka import KafkaProducer
+from confluent_kafka import Producer
 
 # Configuration
 KAFKA_BROKER = os.getenv("KAFKA_BROKER", "localhost:9092")
@@ -11,57 +11,75 @@ STREAM_DATA_PATH = os.getenv(
     "STREAM_DATA_PATH", 
     os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data", "processed", "production_stream.csv")
 )
-DELAY_SECONDS = float(os.getenv("STREAM_DELAY_SECONDS", "1.0"))
+DELAY_SECONDS = float(os.getenv("STREAM_DELAY_SECONDS", "0.2"))
+
+def delivery_report(err, msg):
+    """Callback triggered by producer on message delivery status."""
+    if err is not None:
+        print(f"⚠️ Message delivery failed: {err}")
 
 def create_producer():
-    """Initializes and returns a KafkaProducer with JSON serialization and retry logic."""
+    """Initializes and returns a Confluent Kafka Producer."""
+    conf = {
+        'bootstrap.servers': KAFKA_BROKER,
+        'client.id': 'forest-stream-producer'
+    }
     print(f"Connecting to Kafka broker at {KAFKA_BROKER}...")
-    for attempt in range(1, 11):
-        try:
-            producer = KafkaProducer(
-                bootstrap_servers=[KAFKA_BROKER],
-                value_serializer=lambda v: json.dumps(v).encode("utf-8"),
-                acks="all",
-                retries=3
-            )
-            print("Connected to Kafka Producer successfully!")
-            return producer
-        except Exception as e:
-            print(f"Attempt {attempt}/10: Kafka broker not ready yet ({e}). Waiting 3 seconds...")
-            time.sleep(3)
-    raise RuntimeError("Failed to connect to Kafka broker after 10 attempts.")
+    producer = Producer(conf)
+    print("Connected to Kafka Producer successfully!")
+    return producer
 
-def run_stream():
-    """Reads production_stream.csv row-by-row and emits events to Kafka."""
+def stream_production_events(batch_size: int = 100, delay: float = 0.2):
+    """
+    Streams rows from production_stream.csv to Kafka topic.
+    """
+    print("=" * 70)
+    print("STARTING KAFKA PRODUCTION STREAM PRODUCER")
+    print(f"Target Broker: {KAFKA_BROKER} | Topic: {TOPIC}")
+    print("=" * 70)
+
     if not os.path.exists(STREAM_DATA_PATH):
-        raise FileNotFoundError(f"Stream dataset not found at {STREAM_DATA_PATH}")
+        print(f"Stream dataset not found at {STREAM_DATA_PATH}. Auto-pulling from Cloudflare R2...")
+        from backend.pipeline.pull_data import download_data_from_r2
+        download_data_from_r2()
 
-    print(f"Loading stream dataset from: {STREAM_DATA_PATH}")
-    df = pd.read_csv(STREAM_DATA_PATH)
-    print(f"Total stream records available: {len(df):,}")
+    df_stream = pd.read_csv(STREAM_DATA_PATH)
+    print(f"Loaded {len(df_stream)} real-time terrain survey records.")
 
     producer = create_producer()
-    print(f"Beginning continuous event streaming to topic: '{TOPIC}' (Delay: {DELAY_SECONDS}s/event)...\n")
+    records_sent = 0
 
-    event_count = 0
     try:
-        for idx, row in df.iterrows():
+        for idx, row in df_stream.iterrows():
             payload = row.to_dict()
-            # Send payload to Kafka topic
-            producer.send(TOPIC, value=payload)
-            event_count += 1
+            producer.produce(
+                topic=TOPIC,
+                value=json.dumps(payload).encode('utf-8'),
+                callback=delivery_report
+            )
+            records_sent += 1
 
-            if event_count % 10 == 0 or event_count == 1:
-                print(f"[PRODUCER -> KAFKA] Emitted Event #{event_count}: Elevation={payload.get('Elevation')}m, Slope={payload.get('Slope')} deg")
+            if records_sent % 10 == 0:
+                producer.flush(timeout=1.0)
+                print(f"📡 Sent {records_sent} terrain surveys to topic '{TOPIC}' (Latest Elevation: {payload.get('Elevation')}m)")
 
-            time.sleep(DELAY_SECONDS)
+            if records_sent >= batch_size:
+                print(f"\n✅ Reached requested batch limit of {batch_size} events.")
+                break
+
+            time.sleep(delay)
 
         producer.flush()
-        print(f"\nStreaming completed! Total events pushed: {event_count}")
+        print(f"Producer finished. Total messages produced: {records_sent}")
     except KeyboardInterrupt:
         print("\nProducer stopped by user.")
-    finally:
-        producer.close()
+        producer.flush()
 
 if __name__ == "__main__":
-    run_stream()
+    import argparse
+    parser = argparse.ArgumentParser(description="Stream Forest Survey Events to Kafka")
+    parser.add_argument("--batch-size", type=int, default=100, help="Number of records to stream")
+    parser.add_argument("--delay", type=float, default=0.1, help="Delay between events in seconds")
+    args = parser.parse_args()
+
+    stream_production_events(batch_size=args.batch_size, delay=args.delay)

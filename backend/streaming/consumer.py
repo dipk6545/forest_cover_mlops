@@ -2,7 +2,7 @@ import os
 import json
 import time
 import requests
-from kafka import KafkaConsumer, KafkaProducer
+from confluent_kafka import Consumer, Producer
 
 # Configuration
 KAFKA_BROKER = os.getenv("KAFKA_BROKER", "localhost:9092")
@@ -12,92 +12,94 @@ API_URL = os.getenv("API_PREDICT_URL", "http://localhost:8000/predict")
 GROUP_ID = os.getenv("KAFKA_GROUP_ID", "forest-scoring-group")
 
 def connect_consumer():
-    """Initializes and returns a KafkaConsumer with retry logic."""
+    """Initializes and returns a Confluent Kafka Consumer."""
+    conf = {
+        'bootstrap.servers': KAFKA_BROKER,
+        'group.id': GROUP_ID,
+        'auto.offset.reset': 'earliest',
+        'enable.auto.commit': True
+    }
     print(f"Connecting Consumer to {KAFKA_BROKER} on topic '{TOPIC_RAW}'...")
-    for attempt in range(1, 11):
-        try:
-            consumer = KafkaConsumer(
-                TOPIC_RAW,
-                bootstrap_servers=[KAFKA_BROKER],
-                auto_offset_reset="earliest",
-                enable_auto_commit=True,
-                group_id=GROUP_ID,
-                value_deserializer=lambda m: json.loads(m.decode("utf-8"))
-            )
-            print("Connected to Kafka Consumer successfully!")
-            return consumer
-        except Exception as e:
-            print(f"Attempt {attempt}/10: Kafka broker not ready yet ({e}). Waiting 3 seconds...")
-            time.sleep(3)
-    raise RuntimeError("Failed to connect to Kafka consumer.")
+    consumer = Consumer(conf)
+    consumer.subscribe([TOPIC_RAW])
+    print("Connected to Kafka Consumer successfully!")
+    return consumer
 
-def connect_pred_producer():
-    """Producer to publish scored predictions to topic: terrain_survey.predictions."""
-    try:
-        return KafkaProducer(
-            bootstrap_servers=[KAFKA_BROKER],
-            value_serializer=lambda v: json.dumps(v).encode("utf-8")
-        )
-    except Exception as e:
-        print(f"Note: Prediction publisher initialization: {e}")
-        return None
+def connect_producer():
+    """Initializes and returns a Confluent Kafka Producer for scored predictions."""
+    conf = {
+        'bootstrap.servers': KAFKA_BROKER,
+        'client.id': 'forest-scoring-producer'
+    }
+    return Producer(conf)
 
-def run_consumer():
-    """Listens to Kafka raw topic, scores each event via FastAPI, and logs output."""
+def start_scoring_service():
+    """
+    Subscribes to raw terrain surveys, requests real-time model inference from
+    FastAPI (/predict), and publishes enriched predictions to predictions topic.
+    """
+    print("=" * 70)
+    print("STARTING REAL-TIME KAFKA STREAMING CONSUMER & INFERENCE PIPELINE")
+    print(f"Inference Endpoint: {API_URL}")
+    print("=" * 70)
+
     consumer = connect_consumer()
-    pred_producer = connect_pred_producer()
-
-    print(f"Real-Time ML Consumer Active! Scoring incoming events via {API_URL}...\n")
-    processed_count = 0
+    producer = connect_producer()
+    records_processed = 0
 
     try:
-        for message in consumer:
-            raw_event = message.value
-            processed_count += 1
-
-            # Prepare payload for FastAPI /predict
-            payload = {
-                "Elevation": float(raw_event.get("Elevation", 2500)),
-                "Aspect": float(raw_event.get("Aspect", 0)),
-                "Slope": float(raw_event.get("Slope", 0)),
-                "Horizontal_Distance_To_Hydrology": float(raw_event.get("Horizontal_Distance_To_Hydrology", 0)),
-                "Vertical_Distance_To_Hydrology": float(raw_event.get("Vertical_Distance_To_Hydrology", 0)),
-                "Horizontal_Distance_To_Roadways": float(raw_event.get("Horizontal_Distance_To_Roadways", 0)),
-                "Horizontal_Distance_To_Fire_Points": float(raw_event.get("Horizontal_Distance_To_Fire_Points", 0)),
-                "Hillshade_9am": float(raw_event.get("Hillshade_9am", 200)),
-                "Hillshade_Noon": float(raw_event.get("Hillshade_Noon", 200)),
-                "Hillshade_3pm": float(raw_event.get("Hillshade_3pm", 150)),
-                "Wilderness_Area": int(raw_event.get("Wilderness_Area", 1)),
-                "Soil_Type": int(raw_event.get("Soil_Type", 29))
-            }
+        while True:
+            msg = consumer.poll(timeout=1.0)
+            if msg is None:
+                continue
+            if msg.error():
+                print(f"Consumer error: {msg.error()}")
+                continue
 
             try:
-                # Call FastAPI scoring endpoint
-                resp = requests.post(API_URL, json=payload, timeout=5)
+                raw_payload = json.loads(msg.value().decode('utf-8'))
+                
+                # Strip actual target if present for clean scoring request
+                scoring_input = {k: v for k, v in raw_payload.items() if k != "Cover_Type"}
+
+                # Call FastAPI model inference engine
+                resp = requests.post(API_URL, json=scoring_input, timeout=5.0)
+
                 if resp.status_code == 200:
                     pred_data = resp.json()
-                    tree_species = pred_data.get("tree_species")
-                    conf = pred_data.get("confidence")
-                    latency = pred_data.get("latency_ms")
+                    enriched_event = {
+                        "timestamp": time.time(),
+                        "elevation": scoring_input.get("Elevation"),
+                        "predicted_cover_type": pred_data.get("cover_type_id"),
+                        "tree_species": pred_data.get("tree_species"),
+                        "confidence": pred_data.get("confidence"),
+                        "latency_ms": pred_data.get("latency_ms"),
+                        "ground_truth": raw_payload.get("Cover_Type")
+                    }
 
-                    # Log to console
-                    print(f"[CONSUMER <- SCORED #{processed_count}] Species: {tree_species:<16} | Conf: {conf*100:.1f}% | Latency: {latency:.1f}ms")
+                    # Publish scored event to output Kafka topic
+                    producer.produce(
+                        topic=TOPIC_PRED,
+                        value=json.dumps(enriched_event).encode('utf-8')
+                    )
+                    records_processed += 1
 
-                    # Publish to predictions topic
-                    if pred_producer:
-                        output_event = {**raw_event, "prediction": pred_data}
-                        pred_producer.send(TOPIC_PRED, value=output_event)
+                    print(
+                        f"🌲 [{records_processed}] Scored Survey: Elev={enriched_event['elevation']}m -> "
+                        f"Class: {enriched_event['tree_species']} ({enriched_event['predicted_cover_type']}) | "
+                        f"Conf: {enriched_event['confidence']:.2f} | Latency: {enriched_event['latency_ms']:.1f}ms"
+                    )
                 else:
-                    print(f"[ERROR] API returned status {resp.status_code}: {resp.text}")
-            except Exception as api_err:
-                print(f"[ERROR] Inference call failed: {api_err}")
+                    print(f"⚠️ FastAPI returned error: {resp.status_code} - {resp.text}")
+
+            except Exception as e:
+                print(f"Error processing message: {e}")
 
     except KeyboardInterrupt:
-        print("\nConsumer stopped by user.")
+        print(f"\nConsumer stopped. Total records scored: {records_processed}")
     finally:
         consumer.close()
-        if pred_producer:
-            pred_producer.close()
+        producer.flush()
 
 if __name__ == "__main__":
-    run_consumer()
+    start_scoring_service()
