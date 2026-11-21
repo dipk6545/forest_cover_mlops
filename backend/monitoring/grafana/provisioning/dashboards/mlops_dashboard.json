@@ -1,0 +1,94 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": true,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 100,
+      "title": "Real-Time Model Serving Health & Throughput",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
+          "unit": "short"
+        }
+      },
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 1 },
+      "id": 1,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "title": "Total Predictions Served",
+      "type": "stat",
+      "targets": [{ "expr": "sum(api_requests_total{status='200'}) or vector(0)", "legendFormat": "Predictions" }]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "unit": "reqps"
+        }
+      },
+      "gridPos": { "h": 5, "w": 18, "x": 6, "y": 1 },
+      "id": 2,
+      "title": "Live Request Rate (req/sec)",
+      "type": "timeseries",
+      "targets": [{ "expr": "rate(api_requests_total[1m])", "legendFormat": "{{endpoint}} ({{status}})" }]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 6 },
+      "id": 101,
+      "title": "Inference Latency & Class Distribution",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" } }
+      },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 7 },
+      "id": 3,
+      "options": { "pieType": "donut" },
+      "title": "Predictions by Tree Species (Class Distribution)",
+      "type": "piechart",
+      "targets": [{ "expr": "predictions_by_class_total", "legendFormat": "Class {{cover_type}}" }]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "unit": "s"
+        }
+      },
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 7 },
+      "id": 4,
+      "title": "Inference Latency Distribution (Seconds)",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum(rate(prediction_latency_seconds_bucket[5m])) by (le))", "legendFormat": "p95 Latency" },
+        { "expr": "histogram_quantile(0.50, sum(rate(prediction_latency_seconds_bucket[5m])) by (le))", "legendFormat": "p50 (Median) Latency" }
+      ]
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["mlops", "fastapi", "prometheus", "forest-cover"],
+  "time": { "from": "now-15m", "to": "now" },
+  "timepicker": {},
+  "timezone": "",
+  "title": "Forest Cover MLOps - Production Dashboard",
+  "uid": "forest-cover-mlops-overview",
+  "version": 1
+}

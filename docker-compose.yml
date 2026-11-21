@@ -26,7 +26,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # 2. FastAPI Model Serving Engine (Pre-built by GitHub Actions)
+  # 2. FastAPI Model Serving Engine
   api:
     image: ghcr.io/dipk6545/forest_cover_mlops/api:latest
     build:
@@ -68,3 +68,18 @@ services:
       - ./backend/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
     depends_on:
       - api
+
+  # 5. Grafana Real-Time Visualization Dashboard
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: forest_grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./backend/monitoring/grafana/provisioning:/etc/grafana/provisioning
+    depends_on:
+      - prometheus
