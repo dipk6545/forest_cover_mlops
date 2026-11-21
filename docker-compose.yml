@@ -26,8 +26,9 @@ services:
       timeout: 5s
       retries: 5
 
-  # 2. FastAPI Model Serving Engine
+  # 2. FastAPI Model Serving Engine (Pre-built by GitHub Actions)
   api:
+    image: ghcr.io/dipk6545/forest_cover_mlops/api:latest
     build:
       context: .
       dockerfile: Dockerfile
