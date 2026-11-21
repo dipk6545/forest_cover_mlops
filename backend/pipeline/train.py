@@ -17,8 +17,9 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROJECT_ROOT = os.path.dirname(BASE_DIR)
 load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
 
-# 2. Configure MLflow Tracking & Cloudflare R2 Artifact Storage
-mlflow_tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "sqlite:///mlflow.db")
+# 2. Configure MLflow Tracking to point to running MLflow Tracking Server
+# In Codespaces or local execution, logging to http://localhost:5000 ensures immediate UI visibility!
+mlflow_tracking_uri = os.getenv("MLFLOW_HTTP_URI", "http://localhost:5000")
 mlflow.set_tracking_uri(mlflow_tracking_uri)
 
 experiment_name = "forest-cover-classification"
