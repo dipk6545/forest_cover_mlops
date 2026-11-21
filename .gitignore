@@ -88,8 +88,5 @@ target/
 # Mypy cache
 .mypy_cache/
 
-# Ignore large model artifacts and datasets
-*.joblib
-*.pkl
-backend/models/*
-!backend/models/.gitkeep
+# Large datasets
+/data/
