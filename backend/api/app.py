@@ -62,11 +62,37 @@ SPECIES_MAP = {
 def load_model_artifacts():
     """
     Loads the trained LightGBM model and feature schema on API boot.
+    If the model does not exist locally, it automatically pulls it from Cloudflare R2!
     """
     global model, metadata, expected_features
     try:
         if not os.path.exists(MODEL_PATH):
-            raise FileNotFoundError(f"Model artifact not found at {MODEL_PATH}")
+            print(f"Model artifact not found locally at {MODEL_PATH}. Attempting to pull from Cloudflare R2...")
+            r2_endpoint = os.getenv("R2_ENDPOINT_URL") or os.getenv("MLFLOW_S3_ENDPOINT_URL")
+            r2_bucket = os.getenv("R2_BUCKET_NAME", "netsentry")
+            aws_key = os.getenv("AWS_ACCESS_KEY_ID")
+            aws_secret = os.getenv("AWS_SECRET_ACCESS_KEY")
+            
+            if r2_endpoint and aws_key and aws_secret:
+                try:
+                    import boto3
+                    os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
+                    s3 = boto3.client(
+                        "s3",
+                        endpoint_url=r2_endpoint,
+                        aws_access_key_id=aws_key,
+                        aws_secret_access_key=aws_secret,
+                        region_name="auto"
+                    )
+                    r2_key = "forest-cover-mlops/artifacts/model.joblib"
+                    print(f"Downloading model from Cloudflare R2 ({r2_bucket}/{r2_key}) to {MODEL_PATH}...")
+                    s3.download_file(r2_bucket, r2_key, MODEL_PATH)
+                    print("✅ Successfully downloaded model artifact from Cloudflare R2!")
+                except Exception as dl_err:
+                    print(f"⚠️ Failed to pull from Cloudflare R2: {dl_err}")
+
+        if not os.path.exists(MODEL_PATH):
+            raise FileNotFoundError(f"Model artifact not found at {MODEL_PATH} and could not be fetched from R2")
         
         model = joblib.load(MODEL_PATH)
         print(f"Loaded production model from {MODEL_PATH}")
