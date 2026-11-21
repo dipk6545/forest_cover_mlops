@@ -8,12 +8,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY requirements-serve.txt .
 
-# Use Cloudflare/Fastly CDN mirrors with extended timeout to bypass Codespaces PyPI throttling
+# Use PyPI official wheel host directly with trusted-host and extended timeout
 RUN pip install --no-cache-dir \
-    -i https://pypi.org/simple \
-    --extra-index-url https://mirrors.aliyun.com/pypi/simple/ \
-    --default-timeout=120 \
-    --retries=5 \
+    --default-timeout=300 \
+    --retries=10 \
+    --trusted-host pypi.org \
+    --trusted-host files.pythonhosted.org \
     -r requirements-serve.txt
 
 COPY backend /app/backend
