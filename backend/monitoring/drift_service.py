@@ -1,0 +1,88 @@
+import os
+import json
+import pandas as pd
+from datetime import datetime
+from evidently.legacy.report import Report
+from evidently.legacy.metric_preset import DataDriftPreset, DataQualityPreset
+
+# Paths
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PROJECT_ROOT = os.path.dirname(BASE_DIR)
+REF_DATA_PATH = os.path.join(PROJECT_ROOT, "data", "processed", "train_reference.csv")
+STREAM_DATA_PATH = os.path.join(PROJECT_ROOT, "data", "processed", "production_stream.csv")
+REPORTS_DIR = os.path.join(BASE_DIR, "monitoring", "reports")
+os.makedirs(REPORTS_DIR, exist_ok=True)
+
+def generate_drift_report(n_samples: int = 2000, inject_drift: bool = False):
+    """
+    Compares the reference training baseline against incoming production samples
+    using Evidently AI and outputs an interactive HTML report and JSON summary.
+    """
+    print("=" * 70)
+    print("RUNNING EVIDENTLY AI DATA DRIFT MONITORING")
+    print("=" * 70)
+
+    # 1. Load Reference (Baseline) Data
+    print(f"1. Loading reference baseline ({REF_DATA_PATH})...")
+    df_ref = pd.read_csv(REF_DATA_PATH)
+    reference_sample = df_ref.sample(n=min(5000, len(df_ref)), random_state=42)
+
+    # 2. Load Production Stream Data
+    print(f"2. Loading production stream batch ({STREAM_DATA_PATH})...")
+    df_stream = pd.read_csv(STREAM_DATA_PATH)
+    current_sample = df_stream.sample(n=min(n_samples, len(df_stream)), random_state=123).copy()
+
+    # 3. Optional: Inject artificial elevation drift to test alert triggers
+    if inject_drift:
+        print("⚠️  Injecting realistic domain shift: +400m elevation bias (subalpine survey shift)...")
+        current_sample["Elevation"] = current_sample["Elevation"] + 400.0
+
+    # Key continuous features to evaluate
+    features_to_monitor = [
+        "Elevation", "Aspect", "Slope",
+        "Horizontal_Distance_To_Hydrology", "Vertical_Distance_To_Hydrology",
+        "Horizontal_Distance_To_Roadways", "Horizontal_Distance_To_Fire_Points",
+        "Hillshade_9am", "Hillshade_Noon", "Hillshade_3pm"
+    ]
+
+    ref_subset = reference_sample[features_to_monitor]
+    curr_subset = current_sample[features_to_monitor]
+
+    # 4. Generate Evidently Drift Report
+    print("3. Computing statistical drift tests across features...")
+    report = Report(metrics=[
+        DataDriftPreset(),
+        DataQualityPreset()
+    ])
+
+    report.run(reference_data=ref_subset, current_data=curr_subset)
+
+    # 5. Save Output Artifacts
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    prefix = "drift_detected" if inject_drift else "normal_stream"
+    
+    html_filename = f"{prefix}_report_{timestamp}.html"
+    html_path = os.path.join(REPORTS_DIR, html_filename)
+    report.save_html(html_path)
+
+    json_filename = f"{prefix}_summary_{timestamp}.json"
+    json_path = os.path.join(REPORTS_DIR, json_filename)
+    report.save_json(json_path)
+
+    latest_html = os.path.join(REPORTS_DIR, "latest_drift_report.html")
+    report.save_html(latest_html)
+
+    print("\n✅ Drift Monitoring Complete!")
+    print(f"   - Interactive HTML Report: {html_path}")
+    print(f"   - Metrics Summary (JSON): {json_path}")
+    print(f"   - Latest Report View:     {latest_html}")
+    print("=" * 70)
+
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="Run Evidently AI Drift Monitor")
+    parser.add_argument("--drift", action="store_true", help="Inject intentional domain shift to verify alert")
+    parser.add_argument("--samples", type=int, default=2000, help="Number of stream rows to evaluate")
+    args = parser.parse_args()
+
+    generate_drift_report(n_samples=args.samples, inject_drift=args.drift)
