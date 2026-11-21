@@ -5,7 +5,7 @@ import joblib
 import numpy as np
 import pandas as pd
 from typing import List, Dict, Any
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, status, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 from starlette.responses import Response
@@ -250,3 +250,16 @@ def get_metrics():
     Exposes Prometheus operational metrics for scraping.
     """
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+@app.post("/train", status_code=status.HTTP_202_ACCEPTED)
+def trigger_training(background_tasks: BackgroundTasks):
+    """
+    Triggers the MLflow training and artifact logging pipeline asynchronously in the background.
+    """
+    from backend.pipeline.train import run_training_pipeline
+    background_tasks.add_task(run_training_pipeline)
+    return {
+        "status": "Training pipeline initiated",
+        "message": "Training running in background. Metrics and artifacts will log directly to MLflow and Cloudflare R2.",
+        "mlflow_url": "http://localhost:5000"
+    }
