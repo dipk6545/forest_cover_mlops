@@ -1,0 +1,10 @@
+[core]
+    no_scm = True
+    analytics = false
+    remote = r2remote
+['remote "r2remote"']
+    url = s3://netsentry/forest-cover-mlops/dvc-storage
+    endpointurl = https://dfcbe45d845c1921a3d4d4788751831a.r2.cloudflarestorage.com
+    access_key_id = ac7af35283f25051d0ec47d211ba89ef
+    secret_access_key = 70136851b553fd96237d286876e3efe5e9c7b394a394484353f70eb8b9e067a9
+    region = auto
