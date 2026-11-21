@@ -2,13 +2,15 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# Install system dependencies including OpenMP runtime (libgomp1) required by LightGBM
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements-serve.txt .
 
-# Use PyPI official wheel host directly with trusted-host and extended timeout
+# Use PyPI official host with trusted-host and extended timeout
 RUN pip install --no-cache-dir \
     --default-timeout=300 \
     --retries=10 \
