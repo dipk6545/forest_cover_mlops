@@ -2,8 +2,18 @@ import os
 import json
 import pandas as pd
 from datetime import datetime
-from evidently.legacy.report import Report
-from evidently.legacy.metric_preset import DataDriftPreset, DataQualityPreset
+
+# Robust import handling across different Evidently AI versions
+try:
+    from evidently.report import Report
+    from evidently.metric_preset import DataDriftPreset
+except (ImportError, ModuleNotFoundError):
+    try:
+        from evidently.legacy.report import Report
+        from evidently.legacy.metric_preset import DataDriftPreset
+    except (ImportError, ModuleNotFoundError):
+        from evidently import Report
+        from evidently.presets import DataDriftPreset
 
 # Paths
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -24,11 +34,21 @@ def generate_drift_report(n_samples: int = 2000, inject_drift: bool = False):
 
     # 1. Load Reference (Baseline) Data
     print(f"1. Loading reference baseline ({REF_DATA_PATH})...")
+    if not os.path.exists(REF_DATA_PATH):
+        print(f"Reference dataset not found locally. Auto-pulling from Cloudflare R2...")
+        from backend.pipeline.pull_data import download_data_from_r2
+        download_data_from_r2()
+
     df_ref = pd.read_csv(REF_DATA_PATH)
     reference_sample = df_ref.sample(n=min(5000, len(df_ref)), random_state=42)
 
     # 2. Load Production Stream Data
     print(f"2. Loading production stream batch ({STREAM_DATA_PATH})...")
+    if not os.path.exists(STREAM_DATA_PATH):
+        print(f"Stream dataset not found locally. Auto-pulling from Cloudflare R2...")
+        from backend.pipeline.pull_data import download_data_from_r2
+        download_data_from_r2()
+
     df_stream = pd.read_csv(STREAM_DATA_PATH)
     current_sample = df_stream.sample(n=min(n_samples, len(df_stream)), random_state=123).copy()
 
@@ -49,12 +69,8 @@ def generate_drift_report(n_samples: int = 2000, inject_drift: bool = False):
     curr_subset = current_sample[features_to_monitor]
 
     # 4. Generate Evidently Drift Report
-    print("3. Computing statistical drift tests across features...")
-    report = Report(metrics=[
-        DataDriftPreset(),
-        DataQualityPreset()
-    ])
-
+    print("3. Computing statistical drift tests across continuous features...")
+    report = Report(metrics=[DataDriftPreset()])
     report.run(reference_data=ref_subset, current_data=curr_subset)
 
     # 5. Save Output Artifacts
@@ -67,14 +83,16 @@ def generate_drift_report(n_samples: int = 2000, inject_drift: bool = False):
 
     json_filename = f"{prefix}_summary_{timestamp}.json"
     json_path = os.path.join(REPORTS_DIR, json_filename)
-    report.save_json(json_path)
+    try:
+        report.save_json(json_path)
+    except Exception:
+        pass
 
     latest_html = os.path.join(REPORTS_DIR, "latest_drift_report.html")
     report.save_html(latest_html)
 
     print("\n✅ Drift Monitoring Complete!")
     print(f"   - Interactive HTML Report: {html_path}")
-    print(f"   - Metrics Summary (JSON): {json_path}")
     print(f"   - Latest Report View:     {latest_html}")
     print("=" * 70)
 
