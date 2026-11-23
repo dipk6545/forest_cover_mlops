@@ -1,0 +1,35 @@
+{
+  "name": "Forest Cover MLOps Environment",
+  "image": "mcr.microsoft.com/devcontainers/universal:2-linux",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
+      "version": "latest",
+      "enableOnMacOS": true
+    }
+  },
+  "forwardPorts": [3000, 5000, 8000, 9090, 9092],
+  "portsAttributes": {
+    "3000": {
+      "label": "Grafana Dashboard",
+      "onAutoForward": "openBrowserOnce"
+    },
+    "5000": {
+      "label": "MLflow Tracking Server",
+      "onAutoForward": "notify"
+    },
+    "8000": {
+      "label": "FastAPI Model Serving Docs",
+      "onAutoForward": "notify"
+    },
+    "9090": {
+      "label": "Prometheus Monitoring",
+      "onAutoForward": "silent"
+    },
+    "9092": {
+      "label": "Kafka Broker",
+      "onAutoForward": "silent"
+    }
+  },
+  "postCreateCommand": "chmod +x run_stream.sh 2>/dev/null || true && pip install --no-cache-dir -r requirements.txt",
+  "postStartCommand": "docker compose up -d"
+}
