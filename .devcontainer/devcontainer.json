@@ -7,8 +7,16 @@
       "enableOnMacOS": true
     }
   },
-  "forwardPorts": [5000, 8000, 9092],
+  "forwardPorts": [3000, 5000, 6006, 8000, 9090, 9092],
   "portsAttributes": {
+    "3000": {
+      "label": "Grafana Dashboard",
+      "onAutoForward": "openBrowserOnce"
+    },
+    "6006": {
+      "label": "Arize Phoenix Observability",
+      "onAutoForward": "notify"
+    },
     "5000": {
       "label": "MLflow Tracking Server",
       "onAutoForward": "notify"
@@ -17,11 +25,15 @@
       "label": "FastAPI Model Serving Docs",
       "onAutoForward": "notify"
     },
+    "9090": {
+      "label": "Prometheus Monitoring",
+      "onAutoForward": "silent"
+    },
     "9092": {
       "label": "Kafka Broker",
       "onAutoForward": "silent"
     }
   },
-  "postCreateCommand": "chmod +x run_stream.sh 2>/dev/null || true",
+  "postCreateCommand": "chmod +x run_stream.sh 2>/dev/null || true && pip install --no-cache-dir -r requirements.txt",
   "postStartCommand": "docker compose up -d"
 }
