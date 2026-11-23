@@ -40,6 +40,7 @@ services:
       - ./backend/artifacts:/app/backend/artifacts
     environment:
       - PORT=8000
+      - ARIZE_API_KEY=ak-fc199fc3-7223-4267-906a-b55dee277149-S_XGo69iRZKtk3mQ1f0NKr_chcLRByjR
     depends_on:
       - kafka
 
@@ -57,13 +58,3 @@ services:
       --default-artifact-root /mlflow/mlruns
       --host 0.0.0.0
       --port 5000
-
-  # 4. Arize Phoenix Unified Observability & ML Dashboard Server
-  phoenix:
-    image: arizephoenix/phoenix:latest
-    container_name: forest_phoenix_server
-    ports:
-      - "6006:6006"
-    environment:
-      - PHOENIX_PORT=6006
-      - PHOENIX_HOST=0.0.0.0

@@ -7,12 +7,8 @@
       "enableOnMacOS": true
     }
   },
-  "forwardPorts": [5000, 6006, 8000, 9092],
+  "forwardPorts": [5000, 8000, 9092],
   "portsAttributes": {
-    "6006": {
-      "label": "Arize Phoenix Dashboard & Observability",
-      "onAutoForward": "openBrowserOnce"
-    },
     "5000": {
       "label": "MLflow Tracking Server",
       "onAutoForward": "notify"
