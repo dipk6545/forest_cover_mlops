@@ -1,5 +1,5 @@
 services:
-  # 1. Apache Kafka in KRaft Mode (No ZooKeeper required)
+  # 1. Apache Kafka in KRaft Mode (Event Streaming Broker)
   kafka:
     image: confluentinc/cp-kafka:7.5.0
     container_name: forest_kafka_broker
@@ -57,18 +57,3 @@ services:
       --default-artifact-root /mlflow/mlruns
       --host 0.0.0.0
       --port 5000
-
-  # 4. Grafana Cloud-Connected Production Dashboard (Connected to Aiven PostgreSQL!)
-  grafana:
-    image: grafana/grafana:10.2.0
-    container_name: forest_grafana
-    ports:
-      - "3000:3000"
-    env_file:
-      - .env
-    environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-      - GF_USERS_ALLOW_SIGN_UP=false
-    volumes:
-      - ./backend/monitoring/grafana/provisioning:/etc/grafana/provisioning
