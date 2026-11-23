@@ -2,6 +2,7 @@ import os
 import json
 import time
 import requests
+import psycopg2
 from confluent_kafka import Consumer, Producer
 
 # Configuration
@@ -10,6 +11,29 @@ TOPIC_RAW = os.getenv("KAFKA_TOPIC_RAW", "terrain_survey.raw")
 TOPIC_PRED = os.getenv("KAFKA_TOPIC_PRED", "terrain_survey.predictions")
 API_URL = os.getenv("API_PREDICT_URL", "http://localhost:8000/predict")
 GROUP_ID = os.getenv("KAFKA_GROUP_ID", "forest-scoring-group")
+
+# Aiven PostgreSQL Connection
+PG_URI = os.getenv("MLFLOW_TRACKING_URI", "").replace("postgresql+psycopg2://", "postgres://")
+pg_conn = None
+if PG_URI and "aivencloud.com" in PG_URI:
+    try:
+        pg_conn = psycopg2.connect(PG_URI)
+        cur = pg_conn.cursor()
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS model_inferences (
+                id SERIAL PRIMARY KEY,
+                timestamp TIMESTAMPTZ DEFAULT NOW(),
+                elevation INT,
+                predicted_class INT,
+                tree_species TEXT,
+                confidence FLOAT,
+                latency_ms FLOAT
+            );
+        """)
+        pg_conn.commit()
+        print("Connected to Aiven PostgreSQL for live Grafana dashboard metrics!")
+    except Exception as e:
+        print(f"PostgreSQL connection note: {e}")
 
 def connect_consumer():
     """Initializes and returns a Confluent Kafka Consumer."""
@@ -82,6 +106,24 @@ def start_scoring_service():
                         topic=TOPIC_PRED,
                         value=json.dumps(enriched_event).encode('utf-8')
                     )
+
+                    # Persist to PostgreSQL for Grafana SQL Dashboard
+                    if pg_conn:
+                        try:
+                            with pg_conn.cursor() as cur:
+                                cur.execute("""
+                                    INSERT INTO model_inferences (elevation, predicted_class, tree_species, confidence, latency_ms)
+                                    VALUES (%s, %s, %s, %s, %s);
+                                """, (
+                                    enriched_event['elevation'],
+                                    enriched_event['predicted_cover_type'],
+                                    enriched_event['tree_species'],
+                                    enriched_event['confidence'],
+                                    enriched_event['latency_ms']
+                                ))
+                                pg_conn.commit()
+                        except Exception as pg_err:
+                            pass
                     records_processed += 1
 
                     print(

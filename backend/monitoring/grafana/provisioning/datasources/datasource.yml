@@ -1,9 +1,16 @@
 apiVersion: 1
 
 datasources:
-  - name: Prometheus
-    type: prometheus
+  - name: AivenPostgreSQL
+    type: postgres
     access: proxy
-    url: http://prometheus:9090
+    url: $__env{PGHOST}:25007
+    user: $__env{PGUSER}
+    secureJsonData:
+      password: $__env{PGPASSWORD}
+    jsonData:
+      database: $__env{PGDATABASE}
+      sslmode: require
+      postgresVersion: 1500
     isDefault: true
-    editable: false
+    editable: true

@@ -58,38 +58,17 @@ services:
       --host 0.0.0.0
       --port 5000
 
-  # 4. Prometheus Observability Server
-  prometheus:
-    image: prom/prometheus:v2.47.0
-    container_name: forest_prometheus
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./backend/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
-    depends_on:
-      - api
-
-  # 5. Grafana Real-Time Visualization Dashboard
+  # 4. Grafana Cloud-Connected Production Dashboard (Connected to Aiven PostgreSQL!)
   grafana:
     image: grafana/grafana:10.2.0
     container_name: forest_grafana
     ports:
       - "3000:3000"
+    env_file:
+      - .env
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
       - ./backend/monitoring/grafana/provisioning:/etc/grafana/provisioning
-    depends_on:
-      - prometheus
-
-  # 6. Arize Phoenix Unified AI & ML Observability Server
-  phoenix:
-    image: arizephoenix/phoenix:latest
-    container_name: forest_phoenix_server
-    ports:
-      - "6006:6006"
-    environment:
-      - PHOENIX_PORT=6006
-      - PHOENIX_HOST=0.0.0.0

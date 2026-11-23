@@ -11,11 +11,11 @@
       "collapsed": false,
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
       "id": 100,
-      "title": "Real-Time Model Serving Health & Throughput",
+      "title": "Model Serving Scale & Volume",
       "type": "row"
     },
     {
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "datasource": { "type": "postgres", "uid": "AivenPostgreSQL" },
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "thresholds" },
@@ -26,66 +26,78 @@
       "gridPos": { "h": 5, "w": 6, "x": 0, "y": 1 },
       "id": 1,
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
-      "title": "Total Predictions Served",
+      "title": "Total Production Predictions",
       "type": "stat",
-      "targets": [{ "expr": "sum(api_requests_total{status='200'}) or vector(0)", "legendFormat": "Predictions" }]
+      "targets": [{ "rawSql": "SELECT count(*) FROM model_inferences;", "format": "table" }]
     },
     {
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "datasource": { "type": "postgres", "uid": "AivenPostgreSQL" },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" },
-          "unit": "reqps"
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] },
+          "unit": "ms"
         }
       },
-      "gridPos": { "h": 5, "w": 18, "x": 6, "y": 1 },
+      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 1 },
       "id": 2,
-      "title": "Live Request Rate (req/sec)",
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "title": "Average Inference Latency",
+      "type": "stat",
+      "targets": [{ "rawSql": "SELECT ROUND(AVG(latency_ms)::numeric, 2) FROM model_inferences;", "format": "table" }]
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "AivenPostgreSQL" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" }
+        }
+      },
+      "gridPos": { "h": 5, "w": 12, "x": 12, "y": 1 },
+      "id": 3,
+      "title": "Real-Time Scoring Throughput (Per Minute)",
       "type": "timeseries",
-      "targets": [{ "expr": "rate(api_requests_total[1m])", "legendFormat": "{{endpoint}} ({{status}})" }]
+      "targets": [{ "rawSql": "SELECT date_trunc('minute', timestamp) AS time, count(*) AS predictions_per_min FROM model_inferences GROUP BY 1 ORDER BY 1;", "format": "time_series" }]
     },
     {
       "collapsed": false,
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 6 },
       "id": 101,
-      "title": "Inference Latency & Class Distribution",
+      "title": "Species Classification Distribution & Terrain Correlation",
       "type": "row"
     },
     {
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "datasource": { "type": "postgres", "uid": "AivenPostgreSQL" },
       "fieldConfig": {
         "defaults": { "color": { "mode": "palette-classic" } }
       },
       "gridPos": { "h": 7, "w": 12, "x": 0, "y": 7 },
-      "id": 3,
+      "id": 4,
       "options": { "pieType": "donut" },
-      "title": "Predictions by Tree Species (Class Distribution)",
+      "title": "Tree Species Classification Breakdown",
       "type": "piechart",
-      "targets": [{ "expr": "predictions_by_class_total", "legendFormat": "Class {{cover_type}}" }]
+      "targets": [{ "rawSql": "SELECT tree_species AS metric, count(*) AS value FROM model_inferences GROUP BY 1 ORDER BY 2 DESC;", "format": "table" }]
     },
     {
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "datasource": { "type": "postgres", "uid": "AivenPostgreSQL" },
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "palette-classic" },
-          "unit": "s"
+          "unit": "m"
         }
       },
       "gridPos": { "h": 7, "w": 12, "x": 12, "y": 7 },
-      "id": 4,
-      "title": "Inference Latency Distribution (Seconds)",
-      "type": "timeseries",
-      "targets": [
-        { "expr": "histogram_quantile(0.95, sum(rate(prediction_latency_seconds_bucket[5m])) by (le))", "legendFormat": "p95 Latency" },
-        { "expr": "histogram_quantile(0.50, sum(rate(prediction_latency_seconds_bucket[5m])) by (le))", "legendFormat": "p50 (Median) Latency" }
-      ]
+      "id": 5,
+      "title": "Average Elevation by Tree Species (Metres)",
+      "type": "barchart",
+      "targets": [{ "rawSql": "SELECT tree_species, ROUND(AVG(elevation)::numeric, 0) AS avg_elevation_m FROM model_inferences GROUP BY 1 ORDER BY 2 DESC;", "format": "table" }]
     }
   ],
   "refresh": "5s",
   "schemaVersion": 38,
   "style": "dark",
-  "tags": ["mlops", "fastapi", "prometheus", "forest-cover"],
-  "time": { "from": "now-15m", "to": "now" },
+  "tags": ["mlops", "cde", "aiven", "postgresql", "forest-cover"],
+  "time": { "from": "now-30m", "to": "now" },
   "timepicker": {},
   "timezone": "",
   "title": "Forest Cover MLOps - Production Dashboard",
