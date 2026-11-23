@@ -3,7 +3,11 @@ import json
 import time
 import requests
 import psycopg2
+from dotenv import load_dotenv
 from confluent_kafka import Consumer, Producer
+
+# Load local .env if present
+load_dotenv()
 
 # Configuration
 KAFKA_BROKER = os.getenv("KAFKA_BROKER", "localhost:9092")
@@ -34,6 +38,8 @@ if PG_URI and "aivencloud.com" in PG_URI:
         print("Connected to Aiven PostgreSQL for live Grafana dashboard metrics!")
     except Exception as e:
         print(f"PostgreSQL connection note: {e}")
+else:
+    print(f"Note: MLFLOW_TRACKING_URI not pointing to aivencloud.com (current: {PG_URI[:15]}...)")
 
 def connect_consumer():
     """Initializes and returns a Confluent Kafka Consumer."""
