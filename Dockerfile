@@ -2,23 +2,27 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies including OpenMP runtime (libgomp1) required by LightGBM
+# Install system dependencies including OpenMP runtime required by LightGBM
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     libgomp1 \
+    build-essential \
+    librdkafka-dev \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements-serve.txt .
+# Copy full requirements and install all packages into the container image
+COPY requirements.txt .
 
-# Use PyPI official host with trusted-host and extended timeout
 RUN pip install --no-cache-dir \
     --default-timeout=300 \
     --retries=10 \
     --trusted-host pypi.org \
     --trusted-host files.pythonhosted.org \
-    -r requirements-serve.txt
+    -r requirements.txt
 
+# Copy source code and artifacts
 COPY backend /app/backend
+COPY data /app/data 2>/dev/null || true
 
 ENV PYTHONPATH=/app
 EXPOSE 8000
