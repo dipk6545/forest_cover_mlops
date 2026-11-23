@@ -16,3 +16,4 @@ pytest>=7.4.0
 requests>=2.31.0
 confluent-kafka>=2.3.0
 evidently>=0.4.0
+arize>=8.0.0
