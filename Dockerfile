@@ -22,7 +22,6 @@ RUN pip install --no-cache-dir \
 
 # Copy source code and artifacts
 COPY backend /app/backend
-COPY data /app/data 2>/dev/null || true
 
 ENV PYTHONPATH=/app
 EXPOSE 8000
