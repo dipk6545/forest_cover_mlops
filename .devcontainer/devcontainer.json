@@ -7,11 +7,15 @@
       "enableOnMacOS": true
     }
   },
-  "forwardPorts": [3000, 5000, 8000, 9090, 9092],
+  "forwardPorts": [3000, 5000, 6006, 8000, 9090, 9092],
   "portsAttributes": {
     "3000": {
       "label": "Grafana Dashboard",
       "onAutoForward": "openBrowserOnce"
+    },
+    "6006": {
+      "label": "Arize Phoenix Observability",
+      "onAutoForward": "notify"
     },
     "5000": {
       "label": "MLflow Tracking Server",

@@ -83,3 +83,13 @@ services:
       - ./backend/monitoring/grafana/provisioning:/etc/grafana/provisioning
     depends_on:
       - prometheus
+
+  # 6. Arize Phoenix Unified AI & ML Observability Server
+  phoenix:
+    image: arizephoenix/phoenix:latest
+    container_name: forest_phoenix_server
+    ports:
+      - "6006:6006"
+    environment:
+      - PHOENIX_PORT=6006
+      - PHOENIX_HOST=0.0.0.0
